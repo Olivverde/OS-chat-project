@@ -95,7 +95,13 @@ void send_message(char *s, int uid){
 	for(i=0; i<MAX_CLIENTS; ++i){
 		if(clients[i]){
 			if(clients[i]->uid != uid){
-				if(write(clients[i]->sockfd, s, strlen(s)) < 0){
+				json_object *NEW_MESSAGE = json_object_new_object();
+                		json_object_object_add(NEW_MESSAGE, "response", json_object_new_string("NEW_MESSAGE"));
+                		json_object_object_add(NEW_MESSAGE, "body", json_object_new_string(s));
+                		//write(cli->sockfd, json_object_to_json_string(INIT_CONEX), 
+                        	//strlen(json_object_to_json_string(INIT_CONEX)));
+				if(write(clients[i]->sockfd, json_object_to_json_string(NEW_MESSAGE),
+					 strlen(json_object_to_json_string(NEW_MESSAGE))) < 0){
 					perror("ERROR: write to descriptor failed");
 					break;
 				}
@@ -112,7 +118,13 @@ void send_private_message(char *s, char *name){
         for(i=0; i<MAX_CLIENTS; ++i){
                 if(clients[i]){
                         if(clients[i]->name == name){
-                                if(write(clients[i]->sockfd, s, strlen(s)) < 0){
+				json_object *NEW_MESSAGE = json_object_new_object();
+                                json_object_object_add(NEW_MESSAGE, "response", json_object_new_string("NEW_MESSAGE"));
+                                json_object_object_add(NEW_MESSAGE, "body", json_object_new_string(s));
+                                //write(cli->sockfd, json_object_to_json_string(INIT_CONEX), 
+                                //strlen(json_object_to_json_string(INIT_CONEX)));
+                                if(write(clients[i]->sockfd, json_object_to_json_string(NEW_MESSAGE),
+					 strlen(json_object_to_json_string(NEW_MESSAGE))) < 0){
                                         perror("ERROR: write to descriptor failed");
                                         break;
                                 }
@@ -189,23 +201,23 @@ void *handle_client(void *arg){
 					json_object *to;
 					//char mssg[128];
 					char to_chat[256];
-					//char aux_to[32];
+					char aux_to[32];
 
 					message = json_object_array_get_idx(body,0);
 					from = json_object_array_get_idx(body,1);
 					delivered_at = json_object_array_get_idx(body,2);
 					to = json_object_array_get_idx(body,3);
-					//strcpy(aux_to, json_object_get_string(to));
+					strcpy(aux_to, json_object_get_string(to));
 
-					sprintf(to_chat, "%s: %s at %s\n", json_object_get_string(from),
-						json_object_get_string(message),json_object_get_string(delivered_at));
-					json_object *aux_mssg = json_object_new_string(to_chat);
-					if(1){
-						printf("perfectly working from all post_chat\n");
+					if(strcmp(aux_to,"all")==0){
+						sprintf(to_chat, "%s: %s at %s\n", json_object_get_string(from),
+                                                	json_object_get_string(message),json_object_get_string(delivered_at));
+                                        	json_object *aux_mssg = json_object_new_string(to_chat);
 						json_object_array_add(all_chat,aux_mssg);
 						send_message(to_chat, cli->uid);
 					}else{
-						char *aux_to = json_object_get_string(to);
+						sprintf(to_chat, "[PRIVATE] %s: %s at %s\n", json_object_get_string(from),
+        	                                   	json_object_get_string(message),json_object_get_string(delivered_at));
 						send_private_message(to_chat,aux_to);
 					}
 
@@ -218,17 +230,34 @@ void *handle_client(void *arg){
 					str_trim_lf(to_chat,strlen(to_chat));
 					printf("%s\n", to_chat);
 
-				/*}else if(strcmp(temp_req,"GET_CHAT\n")){
-					char chat_type[32];
-					strcpy(chat_type, json_object_get_string(body));
-					if(strcmp(temp_req,"all\n")){
-						json_object *GET_CHAT = json_object_new_object();
-                				json_object_object_add(GET_CHAT, "response", json_object_new_string("GET_CHAT"));
-                				json_object_object_add(GET_CHAT, "code", json_object_new_int(200));
-                				json_object_object_add(GET_CHAT, "body", all_chat);
-                				write(cli->sockfd, json_object_to_json_string(GET_CHAT), 
-                        				strlen(json_object_to_json_string(GET_CHAT)));
-					}*/
+				}else if(strcmp(temp_req,"PUT_STATUS")==0){
+					json_object *new_status;
+                                        new_status = json_object_array_get_idx(body,0);
+					int crrt_state = json_object_get_int(new_status);
+					int i;
+                                        for(i=0; i<MAX_CLIENTS; ++i){
+                                        	if(clients[i]){
+							if(clients[i]->uid == cli->uid){
+								clients[i]->status = crrt_state;
+							}
+                                                }
+                                        }
+					json_object *PUT_STATUS = json_object_new_object();
+                                        json_object_object_add(PUT_STATUS, "response", json_object_new_string("PUT_STATUS"));
+                                        json_object_object_add(PUT_STATUS, "code", json_object_new_int(200));
+                                        write(cli->sockfd, json_object_to_json_string(PUT_STATUS), 
+                                                strlen(json_object_to_json_string(PUT_STATUS)));
+				}else if(strcmp(temp_req,"END_CONEX")==0){
+					char end_mssg[64];
+					sprintf(end_mssg, "%s has left\n", cli->name);
+                        		printf("%s", end_mssg);
+                        		json_object *END_CONEX = json_object_new_object();
+                        		json_object_object_add(END_CONEX, "response", json_object_new_string("END_CONEX"));
+                        		json_object_object_add(END_CONEX, "code", json_object_new_int(200));
+                        		write(cli->sockfd, json_object_to_json_string(END_CONEX), 
+                                		strlen(json_object_to_json_string(END_CONEX)));
+                        		send_message(end_mssg, cli->uid);
+                        		leave_flag = 1;
 				}else if(strcmp(temp_req,"GET_USER")==0){
 					char user_type[32];
 					char user_info[56];
@@ -238,7 +267,7 @@ void *handle_client(void *arg){
 					printf("someone asked for user info\n");
 					json_object *users = json_object_new_array();
 		                        json_object *GET_USER = json_object_new_object();
-					
+
 					strcpy(user_type, json_object_get_string(aux_type));
 					printf("%s\n",user_type);
 
