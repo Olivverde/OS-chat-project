@@ -28,7 +28,7 @@ typedef struct{
 
 //char temp_req[16];
 
-json_object *all_chat; 
+json_object *all_chat;
 
 client_t *clients[MAX_CLIENTS];
 
@@ -201,6 +201,7 @@ void *handle_client(void *arg){
 					json_object *from;
 					json_object *delivered_at;
 					json_object *to;
+					json_object *param_arr;
 					//char mssg[128];
 					char to_chat[256];
 					char aux_to[32];
@@ -212,15 +213,58 @@ void *handle_client(void *arg){
 					strcpy(aux_to, json_object_get_string(to));
 
 					if(strcmp(aux_to,"all")==0){
-						sprintf(to_chat, "%s: %s at %s\n", json_object_get_string(from),
-                                                	json_object_get_string(message),json_object_get_string(delivered_at));
-                                        	json_object *aux_mssg = json_object_new_string(to_chat);
-						json_object_array_add(all_chat,aux_mssg);
-						send_message(to_chat, cli->uid);
+						param_arr = json_object_new_array();
+						pthread_mutex_lock(&clients_mutex);
+						int i;
+						for(i=0; i<MAX_CLIENTS; ++i){
+							if(clients[i]){
+								if(clients[i]->uid != uid){
+									json_object *NEW_MESSAGE = json_object_new_object();
+									json_object_object_add(NEW_MESSAGE, "response", json_object_new_string("NEW_MESSAGE"));
+									json_object_array_add(param_arr,json_object_get_string(message));
+									json_object_array_add(param_arr,json_object_get_string(from));
+									json_object_array_add(param_arr,json_object_get_string(delivered_at));
+									json_object_array_add(param_arr,json_object_get_string(to));
+									json_object_object_add(NEW_MESSAGE, "body", param_arr);
+									//write(cli->sockfd, json_object_to_json_string(INIT_CONEX), 
+									//strlen(json_object_to_json_string(INIT_CONEX)));
+									if(write(clients[i]->sockfd, json_object_to_json_string(NEW_MESSAGE),
+										 strlen(json_object_to_json_string(NEW_MESSAGE))) < 0){
+										perror("ERROR: write to descriptor failed");
+										break;
+									}
+								}
+							}
+						}
+						pthread_mutex_unlock(&clients_mutex);
+					}
 					}else{
-						sprintf(to_chat, "[PRIVATE] %s: %s at %s\n", json_object_get_string(from),
-        	                                   	json_object_get_string(message),json_object_get_string(delivered_at));
-						send_private_message(to_chat,aux_to);
+						pthread_mutex_lock(&clients_mutex);
+						int i;
+						for(i=0; i<MAX_CLIENTS; ++i){
+							if(clients[i]){
+								//printf("%s:%s\n",clients[i]->name,name);
+								if(strcmp(clients[i]->name, name)==0){
+									json_object *NEW_MESSAGE = json_object_new_object();
+									json_object_object_add(NEW_MESSAGE, "response", json_object_new_string("NEW_MESSAGE"));
+									json_object_array_add(param_arr,json_object_get_string(message));
+									json_object_array_add(param_arr,json_object_get_string(from));
+									json_object_array_add(param_arr,json_object_get_string(delivered_at));
+									json_object_array_add(param_arr,json_object_get_string(to));
+									json_object_object_add(NEW_MESSAGE, "body", param_arr);
+
+									//write(cli->sockfd, json_object_to_json_string(INIT_CONEX), 
+									//strlen(json_object_to_json_string(INIT_CONEX)));
+									if(write(clients[i]->sockfd, json_object_to_json_string(NEW_MESSAGE),
+										 strlen(json_object_to_json_string(NEW_MESSAGE))) < 0){
+										perror("ERROR: write to descriptor failed");
+										break;
+									}
+								}
+							}
+						}
+
+						pthread_mutex_unlock(&clients_mutex);
 					}
 
 					//strcpy(mssg, json_object_get_string(message));
