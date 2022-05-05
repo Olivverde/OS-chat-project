@@ -17,6 +17,7 @@ volatile sig_atomic_t flag = 0;
 int sockfd = 0;
 char name[32];
 char to[32] = "all";
+int i;
 
 void str_overwrite_stdout() {
   printf("%s", "> ");
@@ -47,7 +48,15 @@ void send_msg_handler() {
     str_trim_lf(message, LENGTH);
 
     if (strcmp(message, "/exit") == 0) {
-			break;
+	json_object *END_CONEX = json_object_new_object();
+	json_object_object_add(END_CONEX, "request", json_object_new_string("END_CONEX"));
+	const char* request = json_object_to_json_string(END_CONEX);
+
+	//printf("%s", request);
+	
+	send(sockfd, request, strlen(request), 0);
+	
+	break;
     } 
 else if(strcmp(message, "/help") == 0){
 	printf("Lista de comandos:\n");
@@ -73,7 +82,7 @@ else if(strcmp(message, "/put_status") == 0){
 
 	const char* request = json_object_to_json_string(PUT_STATUS);
 
-	printf("%s", request);
+	//printf("%s", request);
 	
 	sprintf(buffer, "%s",message);
 	send(sockfd, request, strlen(request), 0);
@@ -93,11 +102,42 @@ else if(strcmp(message, "/get_user") == 0){
 
 	const char* request = json_object_to_json_string(GET_USER);
 
-	printf("%s", request);
+	//printf("%s", request);
 	
 	sprintf(buffer, "%s",message);
 	send(sockfd, request, strlen(request), 0);
 }
+
+else if(strcmp(message, "/dm") == 0){
+	printf("Ingrese el nombre del usuario que desea:\n");
+	char input[32];
+	fgets(input,32,stdin);
+	str_trim_lf(input,32);
+
+	printf("Ingrese el mensaje:\n");
+	fgets(message, LENGTH, stdin);
+
+	json_object *POST_CHAT = json_object_new_object();
+	json_object *jarray = json_object_new_array();
+	json_object_object_add(POST_CHAT, "request", json_object_new_string("POST_CHAT"));
+	json_object *jstring_message = json_object_new_string(message);
+	json_object *jstring_from = json_object_new_string(name);
+	json_object *jstring_time = json_object_new_string("00:00");
+	json_object *jstring_to = json_object_new_string(input);
+	json_object_array_add(jarray,jstring_message);
+	json_object_array_add(jarray,jstring_from);	
+	json_object_array_add(jarray,jstring_time);
+	json_object_array_add(jarray,jstring_to);
+	json_object_object_add(POST_CHAT, "body", jarray);
+
+	const char* request = json_object_to_json_string(POST_CHAT);
+
+	//printf("%s", request);
+	
+	sprintf(buffer, "%s",message);
+	send(sockfd, request, strlen(request), 0);
+}
+
 else {
 	sprintf(buffer, "%s\n", message);
 	json_object *POST_CHAT = json_object_new_object();
@@ -116,7 +156,7 @@ else {
 
 	const char* request = json_object_to_json_string(POST_CHAT);
 
-	printf("%s", request);
+	//printf("%s", request);
 
         send(sockfd, request, strlen(request), 0);
     }
@@ -132,8 +172,41 @@ void recv_msg_handler() {
   while (1) {
 		int receive = recv(sockfd, message, LENGTH, 0);
     if (receive > 0) {
-      printf("%s", message);
-      str_overwrite_stdout();
+	
+	json_object *parsed_json;
+	json_object *response;
+	json_object *body;
+	char temp_req[32];
+	size_t n_users;
+
+
+	parsed_json = json_tokener_parse(message);
+	json_object_object_get_ex(parsed_json,"response",&response);
+	strcpy(temp_req, json_object_get_string(response));
+	if(strcmp(temp_req, "GET_USER")==0){
+		json_object *user;
+		json_object_object_get_ex(parsed_json,"body",&body);
+		n_users = json_object_array_length(body);
+		for(i=0;i<n_users;i++){
+			user = json_object_array_get_idx(body,i);
+			printf("%s\n",json_object_get_string(user));
+		}
+		str_overwrite_stdout();
+	}
+	else if(strcmp(temp_req, "NEW_MESSAGE")==0){
+
+		json_object *message_s;
+		
+		json_object_object_get_ex(parsed_json,"body",&body);
+		printf("> %s:",json_object_get_string(body) );
+		str_overwrite_stdout();
+	}
+	else{
+
+        str_overwrite_stdout();
+	}
+      //printf("%s", message);
+      
     } else if (receive == 0) {
 			break;
     } else {

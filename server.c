@@ -117,10 +117,12 @@ void send_private_message(char *s, char *name){
         int i;
         for(i=0; i<MAX_CLIENTS; ++i){
                 if(clients[i]){
-                        if(clients[i]->name == name){
+			//printf("%s:%s\n",clients[i]->name,name);
+                        if(strcmp(clients[i]->name, name)==0){
 				json_object *NEW_MESSAGE = json_object_new_object();
                                 json_object_object_add(NEW_MESSAGE, "response", json_object_new_string("NEW_MESSAGE"));
                                 json_object_object_add(NEW_MESSAGE, "body", json_object_new_string(s));
+				
                                 //write(cli->sockfd, json_object_to_json_string(INIT_CONEX), 
                                 //strlen(json_object_to_json_string(INIT_CONEX)));
                                 if(write(clients[i]->sockfd, json_object_to_json_string(NEW_MESSAGE),
@@ -171,7 +173,7 @@ void *handle_client(void *arg){
 			strlen(json_object_to_json_string(INIT_CONEX)));
 		sprintf(buff_out, "%s has joined\n", cli->name);
 		printf("%s", buff_out);
-		send_message(buff_out, cli->uid);
+		//send_message(buff_out, cli->uid);
 	}
 
 	bzero(buff_out, BUFFER_SZ);
@@ -294,7 +296,8 @@ void *handle_client(void *arg){
                                                         }
                                                 }
                                                 //pthread_mutex_unlock(&clients_mutex);
-	                                        json_object_object_add(GET_USER, "body", json_object_new_string(user_info));
+						json_object_array_add(users,json_object_new_string(user_info));
+	                                        json_object_object_add(GET_USER, "body", users);
 
 					}
 
